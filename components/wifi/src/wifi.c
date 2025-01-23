@@ -34,7 +34,7 @@ void promiscuous_cb(void *buf, wifi_promiscuous_pkt_type_t type)
     if (type != WIFI_PKT_MISC && !pkt->rx_ctrl.rx_state)
     {
         ESP_LOGI(TAG, "Sending packet to xqueue...");
-        packet.length -= 4; // Checksum length
+        // packet.length -= 4; // Checksum length
         send_wifi_packet_to_xqueue(&packet);
     }
     else

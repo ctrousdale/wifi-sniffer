@@ -24,7 +24,7 @@ void app_main(void)
     init_wifi();
 
     send_pcap_global_header();
-    BaseType_t ret = xTaskCreate(uart_task, "uart_task", 4096, NULL, 10, NULL);
+    BaseType_t ret = xTaskCreate(uart_task, "uart_task", 4096, NULL, 5, NULL);
     if (ret == false)
     {
         ESP_LOGI(TAG, "Failed to create xTask.");

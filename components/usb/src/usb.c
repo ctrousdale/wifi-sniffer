@@ -30,9 +30,9 @@ static void install_uart()
     uart_config_t uart_config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
+        .parity = UART_PARITY_EVEN,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE};
+        .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS};
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
 
     ESP_ERROR_CHECK(
@@ -95,13 +95,21 @@ void uart_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
     wifi_packet_t packet;
-    while (1)
+    while (true)
     {
         ESP_LOGI(TAG, "Before get_queue_message. Should be garbage. packet.length: %u", (unsigned int)packet.length);
         if (get_queue_message(&packet) == pdTRUE)
         {
             ESP_LOGI(TAG, "After get_queue_message. Should be good. packet.length: %u", (unsigned int)packet.length);
+            if (packet.length > 1024U * 4U)
+            {
+                ESP_LOGE(TAG, "packet.length is far too long. Length: %u", (unsigned int)packet.length);
+                vTaskDelay(pdMS_TO_TICKS(30 * 1000));
+                continue;
+            }
             ESP_LOGI(TAG, "got queued message");
+            ESP_LOGI(TAG, "packet.seconds: %u", (unsigned int)packet.seconds);
+            ESP_LOGI(TAG, "packet.microseconds: %u", (unsigned int)packet.microseconds);
             wifi_packet_header header = {
                 .seconds = packet.seconds,
                 .microseconds = packet.microseconds,
@@ -117,46 +125,57 @@ void uart_task(void *pvParameters)
                 ESP_ERROR_CHECK(ESP_FAIL);
             }
 
-            /*
             ESP_LOGI(TAG, "Attempting to write data to UART...");
+            ESP_LOGI(TAG, "Before write: packet.data[0]: %u", packet.data[0]);
             written_bytes = uart_write_bytes(uart_num, (const char *)packet.data, packet.length);
+            ESP_LOGI(TAG, "After write: packet.data[0]: %u", packet.data[0]);
             if (written_bytes == -1)
             {
-                ESP_LOGI(TAG, "Failed to write data bytes to UART. Exiting...");
                 ESP_LOGE(TAG, "Failed to write data bytes to UART. Exiting...");
                 ESP_ERROR_CHECK(ESP_FAIL);
             }
-            */
 
-            int remaining_bytes = packet.length;
-            uint8_t *data_ptr = packet.data;
-            const int chunk_size = 1024;
-            while (remaining_bytes > 0)
-            {
-                int bytes_to_write = (remaining_bytes > chunk_size) ? chunk_size : remaining_bytes;
-                written_bytes = uart_write_bytes(uart_num, (const char *)data_ptr, bytes_to_write);
-                if (written_bytes == -1)
-                {
-                    ESP_LOGE(TAG, "Failed to write data bytes to UART. Exiting...");
-                    ESP_ERROR_CHECK(ESP_FAIL);
-                }
-                data_ptr += written_bytes;
-                remaining_bytes -= written_bytes; // Feed the watchdog timer
+            // int remaining_bytes = packet.length;
+            // uint8_t *data_ptr = packet.data;
+            // const int chunk_size = 1024;
+            // while (remaining_bytes > 0)
+            // {
+            //     int bytes_to_write = (remaining_bytes > chunk_size) ? chunk_size : remaining_bytes;
+            //     written_bytes = uart_write_bytes(uart_num, (const char *)data_ptr, bytes_to_write);
+            //     if (written_bytes == -1)
+            //     {
+            //         ESP_LOGE(TAG, "Failed to write data bytes to UART. Exiting...");
+            //         ESP_ERROR_CHECK(ESP_FAIL);
+            //     }
+            //     data_ptr += written_bytes;
+            //     remaining_bytes -= written_bytes;
 
-                ESP_LOGI(TAG, "Wrote %i bytes, %i remaining.", written_bytes, remaining_bytes);
+            //     ESP_LOGI(TAG, "Wrote %i bytes, %i remaining.", written_bytes, remaining_bytes);
 
-                esp_task_wdt_reset();
-            }
+            //     // esp_task_wdt_reset();
+            // }
 
             ESP_LOGI(TAG, "Data written to UART, total bytes: %u", (unsigned int)packet.length);
             ESP_LOGI(TAG, "Wrote all data to UART.");
 
+            ESP_ERROR_CHECK(esp_task_wdt_reset());
+
+            size_t heap_size = esp_get_free_heap_size();
+            ESP_LOGI(TAG, "Free heap size: %u", (unsigned int)heap_size);
+
+            ESP_LOGI(TAG, "Before free()");
             free(packet.data);
+            // ESP_LOGI(TAG, "After free()");
 
-            ESP_LOGI(TAG, "Waiting...");
-            vTaskDelay(pdMS_TO_TICKS(10 * 1000));
+            // ESP_LOGI(TAG, "Waiting...");
+            // vTaskDelay(pdMS_TO_TICKS(10 * 1000));
+
+            // Momentarily give back control to FreeRTOS.
+            // Should feed watchdog timer.
+            vTaskDelay(pdMS_TO_TICKS(10));
+            // taskYIELD();
         }
-
-        ESP_LOGE(TAG, "Exiting uart_task()...");
     }
+
+    ESP_LOGE(TAG, "Exiting uart_task()...");
 }
