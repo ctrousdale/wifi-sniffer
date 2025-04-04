@@ -15,38 +15,45 @@ static const wifi_promiscuous_filter_t promiscuous_filter =
 
 void promiscuous_cb(void *buf, wifi_promiscuous_pkt_type_t type)
 {
-    ESP_LOGI(TAG, "inside of cb");
+    if (buf == NULL)
+    {
+        ESP_LOGE(TAG, "Buffer is NULL. Exiting...");
+        ESP_ERROR_CHECK(ESP_FAIL);
+    }
+
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+
     wifi_packet_t packet;
-
-    ESP_LOGI(TAG, "pkt->rx_ctrl.sig_len: %u", pkt->rx_ctrl.sig_len);
-
     packet.data = malloc(pkt->rx_ctrl.sig_len);
-    memcpy(packet.data, pkt->payload, pkt->rx_ctrl.sig_len);
+    if (packet.data == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for packet data. Exiting...");
+        ESP_ERROR_CHECK(ESP_FAIL);
+    }
 
+    memcpy(packet.data, pkt->payload, pkt->rx_ctrl.sig_len);
     packet.seconds = pkt->rx_ctrl.timestamp / 1000000U;
     packet.microseconds = pkt->rx_ctrl.timestamp % 1000000U;
     packet.length = pkt->rx_ctrl.sig_len;
-
-    ESP_LOGI(TAG, "packet.length: %u", (unsigned int)packet.length);
+    packet.length -= 4; // Remove FCS
 
     /* For now, the sniffer only dumps the length of the MISC type frame */
     if (type != WIFI_PKT_MISC && !pkt->rx_ctrl.rx_state)
     {
-        ESP_LOGI(TAG, "Sending packet to xqueue...");
-        // packet.length -= 4; // Checksum length
         send_wifi_packet_to_xqueue(&packet);
     }
     else
     {
-        ESP_LOGI(TAG, "Didn't send packet...");
+        ESP_LOGW(TAG, "Didn't send packet to xQueue.");
         free(packet.data);
     }
+
+    ESP_LOGI(TAG, "Packet sent to xQueue. Length: %u", (unsigned int)packet.length);
 }
 
 void init_nvs(void)
 {
-    ESP_LOGI(TAG, "Initialize NVS...");
+    ESP_LOGI(TAG, "Initializing NVS...");
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -79,9 +86,4 @@ void init_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&promiscuous_filter));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&promiscuous_cb));
     ESP_LOGI(TAG, "Promiscuous mode successfully set.");
-}
-
-void wifi_sniffer_cb(void *recv_buf, wifi_promiscuous_pkt_type_t type)
-{
-    wifi_promiscuous_pkt_t *sniffer = (wifi_promiscuous_pkt_t *)recv_buf;
 }

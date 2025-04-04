@@ -22,29 +22,30 @@ void init_queue_manager(void)
 
 void send_wifi_packet_to_xqueue(wifi_packet_t *packet)
 {
-    ESP_LOGI(TAG, "before xQueueSend: packet->length: %u", (unsigned int)packet->length);
+    if (packet == NULL)
+    {
+        ESP_LOGE(TAG, "Packet is NULL. Cannot send to queue.");
+        ESP_ERROR_CHECK(ESP_FAIL);
+        return;
+    }
+
     int ret = xQueueSend(packet_queue, packet, portMAX_DELAY);
     if (ret != pdTRUE)
     {
         ESP_LOGE(TAG, "Work queue full!");
         free(packet->data);
     }
-
-    // ESP_LOGI(TAG, "after xQueueSend, before free: packet->length: %u", (unsigned int)packet->length);
-    // free(packet->data);
 }
 
 BaseType_t get_queue_message(wifi_packet_t *buf)
 {
-    ESP_LOGI(TAG, "Before xQueue: buf->length: %u", (unsigned int)buf->length);
+    if (buf == NULL)
+    {
+        ESP_LOGE(TAG, "Buffer is NULL. Cannot receive from queue.");
+        return pdFALSE;
+    }
 
     BaseType_t ret = xQueueReceive(packet_queue, buf, portMAX_DELAY);
-    // wifi_packet_t t;
-    // BaseType_t ret = xQueueReceive(packet_queue, &t, portMAX_DELAY);
-    // ESP_LOGI(TAG, "After xQueue: t->length: %u", (unsigned int)t.length);
-
-    // buf = &t;
-    ESP_LOGI(TAG, "After assignment: buf->length: %u", (unsigned int)buf->length);
 
     return ret;
 }
