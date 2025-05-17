@@ -1,7 +1,6 @@
 #pragma once
 
-#include <stdio.h>
-// #include <stdint.h>
+#include <cstdint>
 
 typedef struct wifi_packet_header
 {
@@ -11,8 +10,9 @@ typedef struct wifi_packet_header
     uint32_t packet_length;
 } wifi_packet_header;
 
-void init_usb(void);
-
-void send_pcap_global_header(void);
-
-void uart_task(void *pvParameters);
+namespace USB_NS
+{
+    void init_usb(void);
+    void send_pcap_global_header(void);
+    void uart_task(void *pvParameters);
+}
